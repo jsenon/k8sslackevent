@@ -22,8 +22,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -52,19 +55,45 @@ func Serve() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	for {
-		pods, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
 
-		nodes, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
-
-		if err != nil {
-			panic(err.Error())
-		}
-		fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
-		fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
-
-		time.Sleep(10 * time.Second)
+	pods, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
+	if err != nil {
+		panic(err.Error())
 	}
+
+	nodes, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
+
+	watchlist := cache.NewListWatchFromClient(client.Core().RESTClient(), "pods", v1.NamespaceDefault,
+		fields.Everything())
+	_, controller := cache.NewInformer(
+		watchlist,
+		&v1.Pod{},
+		time.Second*0,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				fmt.Printf("add: %s \n", obj)
+			},
+			DeleteFunc: func(obj interface{}) {
+				fmt.Printf("delete: %s \n", obj)
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				fmt.Printf("old: %s, new: %s \n", oldObj, newObj)
+			},
+		},
+	)
+	stop := make(chan struct{})
+	go controller.Run(stop)
+
+	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
+	fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
+	fmt.Println("** Waiting event **")
+	for {
+		time.Sleep(time.Second)
+	}
+
 }
 
 // Connect will connect to k8s cluster
