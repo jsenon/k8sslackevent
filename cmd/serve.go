@@ -71,21 +71,44 @@ func Serve() {
 	_, controller := cache.NewInformer(
 		watchlist,
 		&v1.Pod{},
-		time.Second*0,
+		time.Second*10,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
-				fmt.Printf("add: %s \n", obj)
+				pod := obj.(*v1.Pod)
+				fmt.Println("add Pod:", pod.GetName())
 			},
 			DeleteFunc: func(obj interface{}) {
-				fmt.Printf("delete: %s \n", obj)
+				pod := obj.(*v1.Pod)
+				fmt.Printf("delete Pod: %s \n", pod.GetName())
 			},
-			UpdateFunc: func(oldObj, newObj interface{}) {
-				fmt.Printf("old: %s, new: %s \n", oldObj, newObj)
-			},
+			// UpdateFunc: func(oldObj, newObj interface{}) {
+			// 	podold := oldObj.(*v1.Pod)
+			// 	podnew := newObj.(*v1.Pod)
+			// 	fmt.Printf("old: %s, new: %s \n", podold.GetName(), podnew.GetName())
+			// },
 		},
 	)
 	stop := make(chan struct{})
 	go controller.Run(stop)
+
+	// watchList2 := cache.NewListWatchFromClient(client.Core().RESTClient(), "nodes", v1.NamespaceDefault,
+	// 	fields.Everything())
+	// _, controller2 := cache.NewInformer(
+	// 	watchList2,
+	// 	&v1.Node{},
+	// 	time.Second*30,
+	// 	cache.ResourceEventHandlerFuncs{
+	// 		AddFunc: func(obj interface{}) {
+	// 			fmt.Printf("add: %s \n", obj)
+	// 		},
+	// 		UpdateFunc: func(oldObj, newObj interface{}) {
+	// 			fmt.Printf("old: %s, new: %s \n", oldObj, newObj)
+	// 		},
+	// 	},
+	// )
+
+	// stop2 := make(chan struct{})
+	// go controller2.Run(stop2)
 
 	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 	fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
