@@ -144,9 +144,6 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 	)
 	eController.Run(ctx.Done())
 	return eStore
-
-	// ctx is not canceled, continue immediately
-
 }
 
 func eventNode(ctx context.Context, client *kubernetes.Clientset, store cache.Store) cache.Store {
