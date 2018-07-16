@@ -25,6 +25,7 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -66,49 +67,6 @@ func Serve() {
 		panic(err.Error())
 	}
 
-	watchlist := cache.NewListWatchFromClient(client.Core().RESTClient(), "pods", v1.NamespaceDefault,
-		fields.Everything())
-	_, controller := cache.NewInformer(
-		watchlist,
-		&v1.Pod{},
-		time.Second*10,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				pod := obj.(*v1.Pod)
-				fmt.Println("add Pod:", pod.GetName())
-			},
-			DeleteFunc: func(obj interface{}) {
-				pod := obj.(*v1.Pod)
-				fmt.Printf("delete Pod: %s \n", pod.GetName())
-			},
-			// UpdateFunc: func(oldObj, newObj interface{}) {
-			// 	podold := oldObj.(*v1.Pod)
-			// 	podnew := newObj.(*v1.Pod)
-			// 	fmt.Printf("old: %s, new: %s \n", podold.GetName(), podnew.GetName())
-			// },
-		},
-	)
-	stop := make(chan struct{})
-	go controller.Run(stop)
-
-	// watchList2 := cache.NewListWatchFromClient(client.Core().RESTClient(), "nodes", v1.NamespaceDefault,
-	// 	fields.Everything())
-	// _, controller2 := cache.NewInformer(
-	// 	watchList2,
-	// 	&v1.Node{},
-	// 	time.Second*30,
-	// 	cache.ResourceEventHandlerFuncs{
-	// 		AddFunc: func(obj interface{}) {
-	// 			fmt.Printf("add: %s \n", obj)
-	// 		},
-	// 		UpdateFunc: func(oldObj, newObj interface{}) {
-	// 			fmt.Printf("old: %s, new: %s \n", oldObj, newObj)
-	// 		},
-	// 	},
-	// )
-	// stop2 := make(chan struct{})
-	// go controller2.Run(stop2)
-
 	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 	fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
 
@@ -118,10 +76,11 @@ func Serve() {
 		maplabel := n.GetLabels()
 		for key, val := range maplabel {
 			fmt.Println("", key, "", val)
-
 		}
-
 	}
+
+	var podsStore cache.Store
+	podsStore = eventPod(client, podsStore)
 
 	fmt.Println("** Waiting event **")
 	for {
@@ -152,4 +111,33 @@ func homeDir() string {
 		return h
 	}
 	return os.Getenv("USERPROFILE") // windows
+}
+
+func eventPod(client *kubernetes.Clientset, store cache.Store) cache.Store {
+
+	//Define what we want to look for (Pods)
+	watchlist := cache.NewListWatchFromClient(client.Core().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
+
+	resyncPeriod := 30 * time.Minute
+
+	//Setup an informer to call functions when the watchlist changes
+	eStore, eController := cache.NewInformer(
+		watchlist,
+		&v1.Pod{},
+		resyncPeriod,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				pod := obj.(*v1.Pod)
+				fmt.Println("add Pod:", pod.GetName())
+			},
+			DeleteFunc: func(obj interface{}) {
+				pod := obj.(*v1.Pod)
+				fmt.Printf("delete Pod: %s \n", pod.GetName())
+			},
+		},
+	)
+
+	//Run the controller as a goroutine
+	go eController.Run(wait.NeverStop)
+	return eStore
 }
