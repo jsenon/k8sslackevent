@@ -28,6 +28,7 @@ jobs:
           name: Get dependencies
           command: |
             go get -u github.com/golang/dep/cmd/dep
+            go get -t -d -v ./...
             # dep ensure
       - run: 
           name: Test
