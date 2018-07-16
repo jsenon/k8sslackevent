@@ -1,4 +1,4 @@
-# Demo Istio
+# K8S Event Watcher
 
 [![CircleCI](https://circleci.com/gh/jsenon/demo-istio.svg?style=svg)](https://circleci.com/gh/jsenon/k8sslackevent)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jsenon/demo-istio)](https://goreportcard.com/report/github.com/jsenon/k8sslackevent)
