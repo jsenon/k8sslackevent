@@ -15,10 +15,12 @@
 package cmd
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	r "runtime"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -26,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -52,6 +53,12 @@ func init() {
 // Serve launch command serve
 func Serve() {
 	var kubeconfig *string
+	var podsStore cache.Store
+	var nodesStore cache.Store
+	var eventStore cache.Store
+
+	ctx := context.Background()
+
 	kubeconfig = flag.String("kubeconfig", filepath.Join(homeDir(), ".kube", "config"), "(optional) absolute path to the kubeconfig file")
 
 	client, err := Connect(kubeconfig)
@@ -72,20 +79,16 @@ func Serve() {
 	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 	fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
 
-	_ = getNode(client)
-
-	var podsStore cache.Store
-	var nodesStore cache.Store
-	var eventStore cache.Store
-
-	podsStore = eventPod(client, podsStore)
-	nodesStore = eventNode(client, nodesStore)
-	eventStore = event(client, eventStore, "default")
+	_ = getNode(ctx, client)
+	go eventPod(ctx, client, podsStore)
+	go eventNode(ctx, client, nodesStore)
+	go event(ctx, client, eventStore, "default")
 
 	fmt.Println("** Waiting event **")
-	for {
-		time.Sleep(time.Second)
-	}
+	r.Goexit()
+	// for {
+	// 	time.Sleep(time.Second)
+	// }
 
 }
 
@@ -113,121 +116,149 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE") // windows
 }
 
-func eventPod(client *kubernetes.Clientset, store cache.Store) cache.Store {
+func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Store) cache.Store {
 
-	//Define what we want to look for (Pods)
-	watchlist := cache.NewListWatchFromClient(client.Core().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
+	for {
 
-	resyncPeriod := 30 * time.Minute
+		//Define what we want to look for (Pods)
+		watchlist := cache.NewListWatchFromClient(client.Core().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
 
-	//Setup an informer to call functions when the watchlist changes
-	eStore, eController := cache.NewInformer(
-		watchlist,
-		&v1.Pod{},
-		resyncPeriod,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				pod := obj.(*v1.Pod)
-				fmt.Println("Add Pod:", pod.GetName())
+		resyncPeriod := 30 * time.Minute
+
+		//Setup an informer to call functions when the watchlist changes
+		eStore, eController := cache.NewInformer(
+			watchlist,
+			&v1.Pod{},
+			resyncPeriod,
+			cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					pod := obj.(*v1.Pod)
+					fmt.Println("Add Pod:", pod.GetName())
+				},
+				DeleteFunc: func(obj interface{}) {
+					pod := obj.(*v1.Pod)
+					fmt.Printf("Delete Pod: %s \n", pod.GetName())
+				},
 			},
-			DeleteFunc: func(obj interface{}) {
-				pod := obj.(*v1.Pod)
-				fmt.Printf("Delete Pod: %s \n", pod.GetName())
-			},
-		},
-	)
-
-	//Run the controller as a goroutine
-	go eController.Run(wait.NeverStop)
-	return eStore
-}
-
-func eventNode(client *kubernetes.Clientset, store cache.Store) cache.Store {
-
-	resyncPeriod := 30 * time.Minute
-
-	//Setup an informer to call functions when the watchlist changes
-	eStore, eController := cache.NewInformer(
-		// watchlist,
-		&cache.ListWatch{
-			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
-				return client.Core().Nodes().List(lo)
-			},
-			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
-				return client.Core().Nodes().Watch(lo)
-			},
-		},
-		&v1.Node{},
-		resyncPeriod,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				node := obj.(*v1.Node)
-				fmt.Println("New Node:", node)
-			},
-			DeleteFunc: func(obj interface{}) {
-				node := obj.(*v1.Node)
-				fmt.Println("Deleted Node:", node)
-			},
-			UpdateFunc: nil,
-			// func(objold interface{}, objnew interface{}) {
-			// 	nodeold := objold.(*v1.Node)
-			// 	nodenew := objnew.(*v1.Node)
-			// 	fmt.Println("Updated Node:", nodeold.GetName(), "to:", nodenew)
-			// },
-		},
-	)
-
-	//Run the controller as a goroutine
-	go eController.Run(wait.NeverStop)
-	return eStore
-}
-
-func getNode(client *kubernetes.Clientset) cache.Store {
-	a, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
-	if err != nil {
-		panic(err.Error())
+		)
+		select {
+		case <-ctx.Done():
+			// ctx is canceled
+			return eStore
+		default:
+			eController.Run(ctx.Done())
+			// ctx is not canceled, continue immediately
+		}
 	}
-	for _, n := range a.Items {
-		fmt.Println(n.GetName())
-	}
-	return nil
 }
 
-func event(client *kubernetes.Clientset, store cache.Store, namespace string) cache.Store {
-	resyncPeriod := 30 * time.Minute
+func eventNode(ctx context.Context, client *kubernetes.Clientset, store cache.Store) cache.Store {
 
-	//Setup an informer to call functions when the watchlist changes
-	eStore, eController := cache.NewInformer(
-		// watchlist,
-		&cache.ListWatch{
-			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
-				return client.Core().Events(namespace).List(lo)
-			},
-			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
-				return client.Core().Events(namespace).Watch(lo)
-			},
-		},
-		&v1.Event{},
-		resyncPeriod,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				event := obj.(*v1.Event)
-				fmt.Println("New Event:", event.Reason)
-			},
-			DeleteFunc: func(obj interface{}) {
-				event := obj.(*v1.Event)
-				fmt.Println("Deleted event:", event.Reason)
-			},
-			UpdateFunc: nil,
-			// func(objold interface{}, objnew interface{}) {
-			// 	eventold := objold.(*v1.Node)
-			// 	eventnew := objnew.(*v1.Node)
-			// 	fmt.Println("Updated Event:", eventold.GetName(), "to:", eventnew)
-			// },
-		},
-	)
+	for {
+		resyncPeriod := 30 * time.Minute
 
-	//Run the controller as a goroutine
-	go eController.Run(wait.NeverStop)
-	return eStore
+		//Setup an informer to call functions when the watchlist changes
+		eStore, eController := cache.NewInformer(
+			// watchlist,
+			&cache.ListWatch{
+				ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
+					return client.Core().Nodes().List(lo)
+				},
+				WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
+					return client.Core().Nodes().Watch(lo)
+				},
+			},
+			&v1.Node{},
+			resyncPeriod,
+			cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					node := obj.(*v1.Node)
+					fmt.Println("New Node:", node)
+				},
+				DeleteFunc: func(obj interface{}) {
+					node := obj.(*v1.Node)
+					fmt.Println("Deleted Node:", node)
+				},
+				UpdateFunc: nil,
+				// func(objold interface{}, objnew interface{}) {
+				// 	nodeold := objold.(*v1.Node)
+				// 	nodenew := objnew.(*v1.Node)
+				// 	fmt.Println("Updated Node:", nodeold.GetName(), "to:", nodenew)
+				// },
+			},
+		)
+		select {
+		case <-ctx.Done():
+			// ctx is canceled
+			return eStore
+		default:
+			eController.Run(ctx.Done())
+			// ctx is not canceled, continue immediately
+		}
+	}
+}
+
+func getNode(ctx context.Context, client *kubernetes.Clientset) cache.Store {
+	for {
+		a, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
+		if err != nil {
+			panic(err.Error())
+		}
+		for _, n := range a.Items {
+			fmt.Println(n.GetName())
+		}
+		select {
+		case <-ctx.Done():
+			// ctx is canceled
+			return nil
+		default:
+			return nil
+			// ctx is not canceled, continue immediately
+		}
+	}
+}
+
+func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store, namespace string) cache.Store {
+	for {
+		resyncPeriod := 30 * time.Minute
+
+		//Setup an informer to call functions when the watchlist changes
+		eStore, eController := cache.NewInformer(
+			// watchlist,
+			&cache.ListWatch{
+				ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
+					return client.Core().Events(namespace).List(lo)
+				},
+				WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
+					return client.Core().Events(namespace).Watch(lo)
+				},
+			},
+			&v1.Event{},
+			resyncPeriod,
+			cache.ResourceEventHandlerFuncs{
+				AddFunc: func(obj interface{}) {
+					event := obj.(*v1.Event)
+					fmt.Println("New Event:", event.Reason)
+				},
+				DeleteFunc: func(obj interface{}) {
+					event := obj.(*v1.Event)
+					fmt.Println("Deleted event:", event.Reason)
+				},
+				UpdateFunc: nil,
+				// func(objold interface{}, objnew interface{}) {
+				// 	eventold := objold.(*v1.Node)
+				// 	eventnew := objnew.(*v1.Node)
+				// 	fmt.Println("Updated Event:", eventold.GetName(), "to:", eventnew)
+				// },
+			},
+		)
+		select {
+		case <-ctx.Done():
+			// ctx is canceled
+			return eStore
+		default:
+			eController.Run(ctx.Done())
+			// ctx is not canceled, continue immediately
+		}
+	}
 }
