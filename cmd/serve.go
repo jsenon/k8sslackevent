@@ -122,7 +122,7 @@ func homeDir() string {
 func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Store) cache.Store {
 
 	//Define what we want to look for (Pods)
-	watchlist := cache.NewListWatchFromClient(client.Core().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
+	watchlist := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
 
 	resyncPeriod := 30 * time.Minute
 
@@ -158,10 +158,10 @@ func eventNode(ctx context.Context, client *kubernetes.Clientset, store cache.St
 		// watchlist,
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
-				return client.Core().Nodes().List(lo)
+				return client.CoreV1().Nodes().List(lo)
 			},
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
-				return client.Core().Nodes().Watch(lo)
+				return client.CoreV1().Nodes().Watch(lo)
 			},
 		},
 		&v1.Node{},
@@ -221,10 +221,10 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 		// watchlist,
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
-				return client.Core().Events(namespace).List(lo)
+				return client.CoreV1().Events(namespace).List(lo)
 			},
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
-				return client.Core().Events(namespace).Watch(lo)
+				return client.CoreV1().Events(namespace).Watch(lo)
 			},
 		},
 		&v1.Event{},
@@ -274,5 +274,5 @@ func publish(msg string) {
 	if err != nil {
 		panic(err)
 	}
-	defer rs.Body.Close()
+	defer rs.Body.Close() // nolint: errcheck
 }
