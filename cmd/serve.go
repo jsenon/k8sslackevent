@@ -76,9 +76,11 @@ func Serve() {
 
 	var podsStore cache.Store
 	var nodesStore cache.Store
+	var eventStore cache.Store
 
 	podsStore = eventPod(client, podsStore)
 	nodesStore = eventNode(client, nodesStore)
+	eventStore = event(client, eventStore, "default")
 
 	fmt.Println("** Waiting event **")
 	for {
@@ -164,9 +166,14 @@ func eventNode(client *kubernetes.Clientset, store cache.Store) cache.Store {
 			},
 			DeleteFunc: func(obj interface{}) {
 				node := obj.(*v1.Node)
-				fmt.Println("Delete Node:", node)
+				fmt.Println("Deleted Node:", node)
 			},
 			UpdateFunc: nil,
+			// func(objold interface{}, objnew interface{}) {
+			// 	nodeold := objold.(*v1.Node)
+			// 	nodenew := objnew.(*v1.Node)
+			// 	fmt.Println("Updated Node:", nodeold.GetName(), "to:", nodenew)
+			// },
 		},
 	)
 
@@ -184,4 +191,43 @@ func getNode(client *kubernetes.Clientset) cache.Store {
 		fmt.Println(n.GetName())
 	}
 	return nil
+}
+
+func event(client *kubernetes.Clientset, store cache.Store, namespace string) cache.Store {
+	resyncPeriod := 30 * time.Minute
+
+	//Setup an informer to call functions when the watchlist changes
+	eStore, eController := cache.NewInformer(
+		// watchlist,
+		&cache.ListWatch{
+			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
+				return client.Core().Events(namespace).List(lo)
+			},
+			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
+				return client.Core().Events(namespace).Watch(lo)
+			},
+		},
+		&v1.Event{},
+		resyncPeriod,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				event := obj.(*v1.Event)
+				fmt.Println("New Event:", event.Reason)
+			},
+			DeleteFunc: func(obj interface{}) {
+				event := obj.(*v1.Event)
+				fmt.Println("Deleted event:", event.Reason)
+			},
+			UpdateFunc: nil,
+			// func(objold interface{}, objnew interface{}) {
+			// 	eventold := objold.(*v1.Node)
+			// 	eventnew := objnew.(*v1.Node)
+			// 	fmt.Println("Updated Event:", eventold.GetName(), "to:", eventnew)
+			// },
+		},
+	)
+
+	//Run the controller as a goroutine
+	go eController.Run(wait.NeverStop)
+	return eStore
 }
