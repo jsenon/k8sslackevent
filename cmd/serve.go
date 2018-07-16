@@ -25,7 +25,9 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -70,17 +72,13 @@ func Serve() {
 	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 	fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
 
-	a, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
-	for _, n := range a.Items {
-		fmt.Println(n.GetName())
-		maplabel := n.GetLabels()
-		for key, val := range maplabel {
-			fmt.Println("", key, "", val)
-		}
-	}
+	_ = getNode(client)
 
 	var podsStore cache.Store
+	var nodesStore cache.Store
+
 	podsStore = eventPod(client, podsStore)
+	nodesStore = eventNode(client, nodesStore)
 
 	fmt.Println("** Waiting event **")
 	for {
@@ -128,11 +126,11 @@ func eventPod(client *kubernetes.Clientset, store cache.Store) cache.Store {
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				fmt.Println("add Pod:", pod.GetName())
+				fmt.Println("Add Pod:", pod.GetName())
 			},
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				fmt.Printf("delete Pod: %s \n", pod.GetName())
+				fmt.Printf("Delete Pod: %s \n", pod.GetName())
 			},
 		},
 	)
@@ -140,4 +138,50 @@ func eventPod(client *kubernetes.Clientset, store cache.Store) cache.Store {
 	//Run the controller as a goroutine
 	go eController.Run(wait.NeverStop)
 	return eStore
+}
+
+func eventNode(client *kubernetes.Clientset, store cache.Store) cache.Store {
+
+	resyncPeriod := 30 * time.Minute
+
+	//Setup an informer to call functions when the watchlist changes
+	eStore, eController := cache.NewInformer(
+		// watchlist,
+		&cache.ListWatch{
+			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
+				return client.Core().Nodes().List(lo)
+			},
+			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
+				return client.Core().Nodes().Watch(lo)
+			},
+		},
+		&v1.Node{},
+		resyncPeriod,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				node := obj.(*v1.Node)
+				fmt.Println("New Node:", node)
+			},
+			DeleteFunc: func(obj interface{}) {
+				node := obj.(*v1.Node)
+				fmt.Println("Delete Node:", node)
+			},
+			UpdateFunc: nil,
+		},
+	)
+
+	//Run the controller as a goroutine
+	go eController.Run(wait.NeverStop)
+	return eStore
+}
+
+func getNode(client *kubernetes.Clientset) cache.Store {
+	a, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
+	for _, n := range a.Items {
+		fmt.Println(n.GetName())
+	}
+	return nil
 }
