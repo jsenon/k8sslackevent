@@ -223,12 +223,12 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
-				fmt.Println("New Event:", event.Reason)
+				fmt.Println("New Event:", event.Reason, "", event.Message)
 				fmt.Println("Debug", event)
 			},
 			DeleteFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
-				fmt.Println("Deleted event:", event.Reason)
+				fmt.Println("Deleted event:", event.Reason, "", event.Message)
 				fmt.Println("Debug", event)
 			},
 			UpdateFunc: nil,
