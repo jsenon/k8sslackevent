@@ -106,12 +106,23 @@ func Serve() {
 	// 		},
 	// 	},
 	// )
-
 	// stop2 := make(chan struct{})
 	// go controller2.Run(stop2)
 
 	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 	fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
+
+	a, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
+	for _, n := range a.Items {
+		fmt.Println(n.GetName())
+		maplabel := n.GetLabels()
+		for key, val := range maplabel {
+			fmt.Println("", key, "", val)
+
+		}
+
+	}
+
 	fmt.Println("** Waiting event **")
 	for {
 		time.Sleep(time.Second)
