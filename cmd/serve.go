@@ -15,9 +15,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	r "runtime"
@@ -89,9 +92,6 @@ func Serve() {
 
 	fmt.Println("** Waiting event **")
 	r.Goexit()
-	// for {
-	// 	time.Sleep(time.Second)
-	// }
 
 }
 
@@ -135,10 +135,14 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
 				fmt.Println("Add Pod:", pod.GetName())
+				msg := "New Pod added: " + pod.GetName()
+				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
 				fmt.Printf("Delete Pod: %s \n", pod.GetName())
+				msg := "Deleted Pod: " + pod.GetName()
+				publish(msg)
 			},
 		},
 	)
@@ -165,11 +169,15 @@ func eventNode(ctx context.Context, client *kubernetes.Clientset, store cache.St
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				node := obj.(*v1.Node)
-				fmt.Println("New Node:", node)
+				fmt.Println("New Node:", node.GetName())
+				// msg := "New Node added: " + node.GetName()
+				// publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				node := obj.(*v1.Node)
 				fmt.Println("Deleted Node:", node)
+				// msg := "Deleted Node: " + node.GetName()
+				// publish(msg)
 			},
 			UpdateFunc: nil,
 			// func(objold interface{}, objnew interface{}) {
@@ -205,6 +213,7 @@ func getNode(ctx context.Context, client *kubernetes.Clientset) (cache.Store, er
 }
 
 func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store, namespace string) cache.Store {
+
 	resyncPeriod := 30 * time.Minute
 
 	//Setup an informer to call functions when the watchlist changes
@@ -225,11 +234,15 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 				event := obj.(*v1.Event)
 				fmt.Println("New Event:", event.Reason, "", event.Message)
 				fmt.Println("Debug", event)
+				msg := "New Event Add: " + event.Reason + "\n" + event.Message
+				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
 				fmt.Println("Deleted event:", event.Reason, "", event.Message)
-				fmt.Println("Debug", event)
+				msg := "New Event Delete: " + event.Reason + "\n" + event.Message
+				publish(msg)
+				// fmt.Println("Debug", event)
 			},
 			UpdateFunc: nil,
 			// func(objold interface{}, objnew interface{}) {
@@ -242,4 +255,24 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 	eController.Run(ctx.Done())
 	return eStore
 	// ctx is not canceled, continue immediately
+}
+
+func publish(msg string) {
+	url := os.Getenv("SLACK_URL")
+	fmt.Println("Slack url", url)
+
+	values := map[string]string{"text": msg}
+	b, _ := json.Marshal(values)
+	tr := &http.Transport{
+		MaxIdleConns:       10,
+		IdleConnTimeout:    30 * time.Second,
+		DisableCompression: true,
+	}
+	httpclient := &http.Client{Transport: tr}
+	rs, err := httpclient.Post(url, "application/json", bytes.NewBuffer(b))
+	fmt.Println("Body", b, "rs", rs)
+	if err != nil {
+		panic(err)
+	}
+	defer rs.Body.Close()
 }
