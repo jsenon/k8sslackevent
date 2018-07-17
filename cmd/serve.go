@@ -240,7 +240,7 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 				event := obj.(*v1.Event)
 				fmt.Println("New Event:", event.Reason, "", event.Message, "on ", event.Name)
 				fmt.Println("Debug", event)
-				msg := "New Event Add: " + event.Reason + "\n" + event.Message
+				msg := "New Event: " + event.Reason + "\n" + event.Message
 				publish(msg)
 				err := findPodKilled(ctx, client, "all", 1)
 				if err != nil {
@@ -250,7 +250,7 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 			DeleteFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
 				fmt.Println("Deleted event:", event.Reason, "", event.Message)
-				msg := "New Event Delete: " + event.Reason + "\n" + event.Message
+				msg := "New Event: " + event.Reason + "\n" + event.Message
 				publish(msg)
 				err := findPodKilled(ctx, client, "all", 1)
 				if err != nil {
