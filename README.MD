@@ -7,20 +7,23 @@ An event watcher for Kubernetes Environment, and publish on slack
 
 ## Func
 
-- Pod Event Watcher
+- Pod Event Watcher on default namespace
 - Node Event Watcher
 - Event Watcher
 - Publisher on slack
+- Watch OOMKilled Event and retrieve pod name
 
 ### Build
 
 ### Usage
 
-Generate Health, answer could be 200 or 5xx if `MY_ANSWER_CODE` is set:
+Create Webhook slack application and export URL
 
 ```sh
 export SLACK_URL=https://hooks.slack.com/xxx
 ```
+
+Right now pod watcher is only available on default namespace
 
 ### Env
 
@@ -33,3 +36,8 @@ If you receive `cannot execute binary file: Exec format error`
 Compile with  `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build main.go`
 
 And build `docker build -t jsenon/k8sslackevent:vx.x .`
+
+### TODO
+
+- [ ] Specify Pod watcher namespace as flag
+- [ ] Add Event bus integration
