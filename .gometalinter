@@ -20,5 +20,6 @@
       "goimports",
       "misspell"
     ],
-    "LineLength": 220
+    "LineLength": 220,
+    "gocyclo: : 20
   }

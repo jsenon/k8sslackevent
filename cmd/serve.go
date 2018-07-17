@@ -281,6 +281,7 @@ func publish(msg string) {
 	defer rs.Body.Close() // nolint: errcheck
 }
 
+// nolint: gocyclo
 func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace string, offset uint32) error {
 	if namespace == "all" {
 		fmt.Println("all namespace")
