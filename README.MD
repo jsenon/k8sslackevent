@@ -7,7 +7,7 @@ An event watcher for Kubernetes Environment, and publish on slack
 
 ## Func
 
-- Pod Event Watcher on default namespace
+- Pod Event Watcher on default and kube-system namespace
 - Node Event Watcher
 - Event Watcher
 - Publisher on slack
