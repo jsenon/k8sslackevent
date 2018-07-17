@@ -56,9 +56,9 @@ func init() {
 // Serve launch command serve
 func Serve() {
 	var kubeconfig *string
-	// var podsStore cache.Store
-	// var nodesStore cache.Store
-	// var eventStore cache.Store
+	var podsStore cache.Store
+	var nodesStore cache.Store
+	var eventStore cache.Store
 
 	ctx := context.Background()
 
@@ -86,16 +86,9 @@ func Serve() {
 	if err != nil {
 		panic(err.Error())
 	}
-	// go eventPod(ctx, client, podsStore)
-	// go eventNode(ctx, client, nodesStore)
-	// go event(ctx, client, eventStore, "default")
-
-	fmt.Println("Latest OOMKilled Pod")
-
-	err = findPodKilled(ctx, client, "all", 1)
-	if err != nil {
-		fmt.Println(err)
-	}
+	go eventPod(ctx, client, podsStore)
+	go eventNode(ctx, client, nodesStore)
+	go event(ctx, client, eventStore, "default")
 
 	fmt.Println("** Watcher started - Waiting events **")
 	r.Goexit()
@@ -303,9 +296,9 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 						msg := ("Pod " + n.GetName() + "Container" + m.Name + "has been restarted " + conv(m.RestartCount) + "time" + "due to " + m.LastTerminationState.Terminated.Reason + "at " + m.LastTerminationState.Terminated.FinishedAt.String())
 						publish(msg)
 					} else {
-						fmt.Println("no container OOMKilled")
+						fmt.Println("Debug: No container OOMKilled")
 					}
-					fmt.Println("No container terminated")
+					fmt.Println("Debug: No container terminated")
 				}
 			}
 		}
