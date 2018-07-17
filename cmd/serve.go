@@ -56,9 +56,9 @@ func init() {
 // Serve launch command serve
 func Serve() {
 	var kubeconfig *string
-	var podsStore cache.Store
-	var nodesStore cache.Store
-	var eventStore cache.Store
+	// var podsStore cache.Store
+	// var nodesStore cache.Store
+	// var eventStore cache.Store
 
 	ctx := context.Background()
 
@@ -86,11 +86,18 @@ func Serve() {
 	if err != nil {
 		panic(err.Error())
 	}
-	go eventPod(ctx, client, podsStore)
-	go eventNode(ctx, client, nodesStore)
-	go event(ctx, client, eventStore, "default")
+	// go eventPod(ctx, client, podsStore)
+	// go eventNode(ctx, client, nodesStore)
+	// go event(ctx, client, eventStore, "default")
 
-	fmt.Println("** Waiting event **")
+	fmt.Println("Latest OOMKilled Pod")
+
+	err = findPodKilled(ctx, client, "all", 1)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("** Watcher started - Waiting events **")
 	r.Goexit()
 
 }
@@ -232,10 +239,14 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
-				fmt.Println("New Event:", event.Reason, "", event.Message)
+				fmt.Println("New Event:", event.Reason, "", event.Message, "on ", event.Name)
 				fmt.Println("Debug", event)
 				msg := "New Event Add: " + event.Reason + "\n" + event.Message
 				publish(msg)
+				err := findPodKilled(ctx, client, "all", 1)
+				if err != nil {
+					fmt.Println(err)
+				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
@@ -275,4 +286,70 @@ func publish(msg string) {
 		panic(err)
 	}
 	defer rs.Body.Close() // nolint: errcheck
+}
+
+func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace string, offset uint32) error {
+	if namespace == "all" {
+		fmt.Println("all namespace")
+		a, err := client.CoreV1().Pods(v1.NamespaceAll).List(metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		for _, n := range a.Items {
+			for _, m := range n.Status.ContainerStatuses {
+				if m.LastTerminationState.Terminated != nil {
+					if m.LastTerminationState.Terminated.Reason == "OOMKilled" {
+						fmt.Println("Pod ", n.GetName(), "Container", m.Name, "has been restarted ", m.RestartCount, "time", "due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
+						msg := ("Pod " + n.GetName() + "Container" + m.Name + "has been restarted " + conv(m.RestartCount) + "time" + "due to " + m.LastTerminationState.Terminated.Reason + "at " + m.LastTerminationState.Terminated.FinishedAt.String())
+						publish(msg)
+					} else {
+						fmt.Println("no container OOMKilled")
+					}
+					fmt.Println("No container terminated")
+				}
+			}
+		}
+		return nil
+	}
+
+	fmt.Println("namespace: ", namespace)
+	a, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	for _, n := range a.Items {
+		// fmt.Println("POD: ", n.GetName())
+		for _, m := range n.Status.ContainerStatuses {
+			if m.LastTerminationState.Terminated != nil {
+				if m.LastTerminationState.Terminated.Reason == "OOMKilled" {
+					fmt.Println("Pod ", n.GetName(), "Container", m.Name, "has been restarted ", m.RestartCount, "time", "due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
+				} else {
+					fmt.Println("no container OOMKilled")
+				}
+				fmt.Println("No container terminated")
+			}
+		}
+	}
+	return nil
+}
+
+func conv(n int32) string {
+	buf := [11]byte{}
+	pos := len(buf)
+	i := int64(n)
+	signed := i < 0
+	if signed {
+		i = -i
+	}
+	for {
+		pos--
+		buf[pos], i = '0'+byte(i%10), i/10
+		if i == 0 {
+			if signed {
+				pos--
+				buf[pos] = '-'
+			}
+			return string(buf[pos:])
+		}
+	}
 }
