@@ -259,7 +259,7 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 
 func publish(msg string) {
 	url := os.Getenv("SLACK_URL")
-	fmt.Println("Slack url", url)
+	// fmt.Println("Slack url", url)
 
 	values := map[string]string{"text": msg}
 	b, _ := json.Marshal(values)
@@ -270,7 +270,7 @@ func publish(msg string) {
 	}
 	httpclient := &http.Client{Transport: tr}
 	rs, err := httpclient.Post(url, "application/json", bytes.NewBuffer(b))
-	fmt.Println("Body", b, "rs", rs)
+	// fmt.Println("Body", b, "rs", rs)
 	if err != nil {
 		panic(err)
 	}
