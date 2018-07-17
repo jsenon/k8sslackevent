@@ -86,7 +86,8 @@ func Serve() {
 	if err != nil {
 		panic(err.Error())
 	}
-	go eventPod(ctx, client, podsStore)
+	go eventPod(ctx, client, podsStore, "default")
+	go eventPod(ctx, client, podsStore, "kube-system")
 	go eventNode(ctx, client, nodesStore)
 	go event(ctx, client, eventStore, "default")
 
@@ -119,10 +120,10 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE") // windows
 }
 
-func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Store) cache.Store {
+func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Store, namespace string) cache.Store {
 
 	//Define what we want to look for (Pods)
-	watchlist := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
+	watchlist := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", namespace, fields.Everything())
 
 	resyncPeriod := 30 * time.Minute
 
