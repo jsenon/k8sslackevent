@@ -57,6 +57,7 @@ func init() {
 func Serve() {
 	var kubeconfig *string
 	var podsStore cache.Store
+	var podStorekube cache.Store
 	var nodesStore cache.Store
 	var eventStore cache.Store
 
@@ -87,7 +88,7 @@ func Serve() {
 		panic(err.Error())
 	}
 	go eventPod(ctx, client, podsStore, "default")
-	go eventPod(ctx, client, podsStore, "kube-system")
+	go eventPod(ctx, client, podStorekube, "kube-system")
 	go eventNode(ctx, client, nodesStore)
 	go event(ctx, client, eventStore, "default")
 
@@ -124,8 +125,12 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 
 	//Define what we want to look for (Pods)
 	watchlist := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", namespace, fields.Everything())
-
-	resyncPeriod := 30 * time.Minute
+	fmt.Println("Namespace :", namespace)
+	if namespace == "default" {
+		fmt.Println("Namespace :", namespace)
+		watchlist = cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
+	}
+	resyncPeriod := 5 * time.Minute
 
 	//Setup an informer to call functions when the watchlist changes
 	eStore, eController := cache.NewInformer(
@@ -135,13 +140,13 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				fmt.Println("Add Pod:", pod.GetName())
+				fmt.Println("Add Pod:", pod.GetName(), "on ", namespace)
 				msg := "New Pod added: " + pod.GetName()
 				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				fmt.Printf("Delete Pod: %s \n", pod.GetName())
+				fmt.Println("Delete Pod:", pod.GetName(), "on ", namespace)
 				msg := "Deleted Pod: " + pod.GetName()
 				publish(msg)
 			},
