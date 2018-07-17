@@ -246,6 +246,10 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 				fmt.Println("Deleted event:", event.Reason, "", event.Message)
 				msg := "New Event Delete: " + event.Reason + "\n" + event.Message
 				publish(msg)
+				err := findPodKilled(ctx, client, "all", 1)
+				if err != nil {
+					fmt.Println(err)
+				}
 				// fmt.Println("Debug", event)
 			},
 			UpdateFunc: nil,
