@@ -141,13 +141,13 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
 				fmt.Println("Add Pod:", pod.GetName(), "on ", namespace)
-				msg := "New Pod added: " + pod.GetName()
+				msg := "New Pod added: " + pod.GetName() + namespace
 				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
 				fmt.Println("Delete Pod:", pod.GetName(), "on ", namespace)
-				msg := "Deleted Pod: " + pod.GetName()
+				msg := "Deleted Pod: " + pod.GetName() + namespace
 				publish(msg)
 			},
 		},
