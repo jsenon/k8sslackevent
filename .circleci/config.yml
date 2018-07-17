@@ -39,7 +39,7 @@ jobs:
           command: |
             go get -u github.com/alecthomas/gometalinter
             gometalinter --install
-            gometalinter ./... --exclude=vendor --deadline=120s
+            gometalinter ./... --exclude=vendor --deadline=240s
       - run: 
           name: Code Coverage
           command: |
