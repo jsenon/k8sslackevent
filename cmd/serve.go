@@ -182,7 +182,7 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
 				fmt.Println("Delete Pod:", pod.GetName(), "on", namespace)
-				msg := "Deleted Pod: " + pod.GetName() + namespace
+				msg := "Deleted Pod: " + pod.GetName() + "on" + namespace
 				publish(msg)
 			},
 		},
@@ -268,7 +268,7 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
-				fmt.Println("New Event:", event.Reason, "", event.Message, "on", event.Name)
+				fmt.Println("New Event:", event.Reason, "Message:", event.Message, "Event Name:", event.Name)
 				msg := "New Event: " + event.Reason + "\n" + event.Message
 				publish(msg)
 			},
