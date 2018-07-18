@@ -45,8 +45,8 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Launch Event watcher",
 	Long: `Launch event watcher
-in order to get OOM signal
-`,
+           in order to get OOM signal
+           `,
 	Run: func(cmd *cobra.Command, args []string) {
 		if api == "internal" {
 			Serve("internal")
@@ -68,10 +68,12 @@ func Serve(api string) {
 	var podStorekube cache.Store
 	var nodesStore cache.Store
 	var eventStore cache.Store
+	var eventallStore cache.Store
 
 	ctx := context.Background()
 
-	fmt.Println(api)
+	fmt.Println("You have selected api: ", api)
+	// Internal k8s api
 	if api == "internal" {
 		config, err := rest.InClusterConfig()
 		if err != nil {
@@ -82,9 +84,8 @@ func Serve(api string) {
 			panic(err.Error())
 		}
 	}
-
+	// External k8s api based on .kube/config
 	if api == "external" {
-		fmt.Println(api)
 		kubeconfig = flag.String("kubeconfig", filepath.Join(homeDir(), ".kube", "config"), "(optional) absolute path to the kubeconfig file")
 		flag.Parse()
 		config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
@@ -99,7 +100,6 @@ func Serve(api string) {
 		}
 
 	}
-	fmt.Println("debug")
 	pods, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
 	if err != nil {
 		panic(err.Error())
@@ -109,18 +109,25 @@ func Serve(api string) {
 	if err != nil {
 		panic(err.Error())
 	}
-
+	fmt.Println("*****************************************")
 	fmt.Printf("There are %d pods in the cluster\n", len(pods.Items))
 	fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
+	fmt.Println("*****************************************")
 
 	_, err = getNode(ctx, client)
 	if err != nil {
 		panic(err.Error())
 	}
+	// Watch event pod in default namespace
 	go eventPod(ctx, client, podsStore, "default")
+	// Watch event pod in kube-system namespace
 	go eventPod(ctx, client, podStorekube, "kube-system")
+	// Watch node event
 	go eventNode(ctx, client, nodesStore)
+	// Watch event in default namespace
 	go event(ctx, client, eventStore, "default")
+	// Watch event in all namespace and launch check if its OOMKilled
+	go eventall(ctx, client, eventallStore)
 
 	fmt.Println("** Watcher started - Waiting events **")
 	r.Goexit()
@@ -155,9 +162,7 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 
 	//Define what we want to look for (Pods)
 	watchlist := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", namespace, fields.Everything())
-	fmt.Println("Namespace :", namespace)
 	if namespace == "default" {
-		fmt.Println("Namespace :", namespace)
 		watchlist = cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", v1.NamespaceDefault, fields.Everything())
 	}
 	resyncPeriod := 5 * time.Minute
@@ -170,13 +175,13 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				fmt.Println("Add Pod:", pod.GetName(), "on ", namespace)
+				fmt.Println("Add Pod:", pod.GetName(), "on", namespace)
 				msg := "New Pod added: " + pod.GetName() + namespace
 				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				fmt.Println("Delete Pod:", pod.GetName(), "on ", namespace)
+				fmt.Println("Delete Pod:", pod.GetName(), "on", namespace)
 				msg := "Deleted Pod: " + pod.GetName() + namespace
 				publish(msg)
 			},
@@ -206,21 +211,16 @@ func eventNode(ctx context.Context, client *kubernetes.Clientset, store cache.St
 			AddFunc: func(obj interface{}) {
 				node := obj.(*v1.Node)
 				fmt.Println("New Node:", node.GetName())
-				// msg := "New Node added: " + node.GetName()
-				// publish(msg)
+				msg := "New Node added: " + node.GetName()
+				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				node := obj.(*v1.Node)
 				fmt.Println("Deleted Node:", node)
-				// msg := "Deleted Node: " + node.GetName()
-				// publish(msg)
+				msg := "Deleted Node: " + node.GetName()
+				publish(msg)
 			},
 			UpdateFunc: nil,
-			// func(objold interface{}, objnew interface{}) {
-			// 	nodeold := objold.(*v1.Node)
-			// 	nodenew := objnew.(*v1.Node)
-			// 	fmt.Println("Updated Node:", nodeold.GetName(), "to:", nodenew)
-			// },
 		},
 	)
 	eController.Run(ctx.Done())
@@ -268,32 +268,55 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
-				fmt.Println("New Event:", event.Reason, "", event.Message, "on ", event.Name)
-				fmt.Println("Debug", event)
+				fmt.Println("New Event:", event.Reason, "", event.Message, "on", event.Name)
 				msg := "New Event: " + event.Reason + "\n" + event.Message
 				publish(msg)
-				err := findPodKilled(ctx, client, "all", 1)
-				if err != nil {
-					fmt.Println(err)
-				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
 				fmt.Println("Deleted event:", event.Reason, "", event.Message)
 				msg := "New Event: " + event.Reason + "\n" + event.Message
 				publish(msg)
+			},
+			UpdateFunc: nil,
+		},
+	)
+	eController.Run(ctx.Done())
+	return eStore
+	// ctx is not canceled, continue immediately
+}
+
+func eventall(ctx context.Context, client *kubernetes.Clientset, store cache.Store) cache.Store {
+
+	resyncPeriod := 30 * time.Minute
+
+	//Setup an informer to call functions when the watchlist changes
+	eStore, eController := cache.NewInformer(
+		// watchlist,
+		&cache.ListWatch{
+			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
+				return client.CoreV1().Events(v1.NamespaceAll).List(lo)
+			},
+			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
+				return client.CoreV1().Events(v1.NamespaceAll).Watch(lo)
+			},
+		},
+		&v1.Event{},
+		resyncPeriod,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
 				err := findPodKilled(ctx, client, "all", 1)
 				if err != nil {
 					fmt.Println(err)
 				}
-				// fmt.Println("Debug", event)
+			},
+			DeleteFunc: func(obj interface{}) {
+				err := findPodKilled(ctx, client, "all", 1)
+				if err != nil {
+					fmt.Println(err)
+				}
 			},
 			UpdateFunc: nil,
-			// func(objold interface{}, objnew interface{}) {
-			// 	eventold := objold.(*v1.Node)
-			// 	eventnew := objnew.(*v1.Node)
-			// 	fmt.Println("Updated Event:", eventold.GetName(), "to:", eventnew)
-			// },
 		},
 	)
 	eController.Run(ctx.Done())
@@ -324,7 +347,6 @@ func publish(msg string) {
 // nolint: gocyclo
 func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace string, offset uint32) error {
 	if namespace == "all" {
-		fmt.Println("all namespace")
 		a, err := client.CoreV1().Pods(v1.NamespaceAll).List(metav1.ListOptions{})
 		if err != nil {
 			return err
@@ -336,31 +358,22 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 						fmt.Println("Pod ", n.GetName(), "Container", m.Name, "has been restarted ", m.RestartCount, "time", "due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
 						msg := ("Pod " + n.GetName() + "Container" + m.Name + "has been restarted " + conv(m.RestartCount) + "time" + "due to " + m.LastTerminationState.Terminated.Reason + "at " + m.LastTerminationState.Terminated.FinishedAt.String())
 						publish(msg)
-					} else {
-						fmt.Println("Debug: No container OOMKilled")
 					}
-					fmt.Println("Debug: No container terminated")
 				}
 			}
 		}
 		return nil
 	}
-
-	fmt.Println("namespace: ", namespace)
 	a, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	for _, n := range a.Items {
-		// fmt.Println("POD: ", n.GetName())
 		for _, m := range n.Status.ContainerStatuses {
 			if m.LastTerminationState.Terminated != nil {
 				if m.LastTerminationState.Terminated.Reason == "OOMKilled" {
 					fmt.Println("Pod ", n.GetName(), "Container", m.Name, "has been restarted ", m.RestartCount, "time", "due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
-				} else {
-					fmt.Println("no container OOMKilled")
 				}
-				fmt.Println("No container terminated")
 			}
 		}
 	}
