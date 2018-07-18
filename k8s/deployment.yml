@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8sslackevent
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8sslackevent
+      version: v.0.0.1
+  template:
+    metadata:
+      labels:
+        app: k8sslackevent
+        version: v.0.0.1
+    spec:
+      containers:
+      - name: k8sslackevent
+        image: docker.io/jsenon/k8sslackevent:latest
+        command: ["./k8sslackevent"]
+        args: [serve,--api,internal]
+        env:
+        - name: SLACK_URL
+          value: ""
+        imagePullPolicy: Always
