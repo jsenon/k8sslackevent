@@ -12,10 +12,13 @@ An event watcher for Kubernetes Environment, and publish on slack
 - Event Watcher
 - Publisher on slack
 - Watch OOMKilled Event and retrieve pod name
+- External or Internal k8s api
 
 ### Build
 
 ### Usage
+
+Right now pod watcher is available on default and kube-system namespaces
 
 Create Webhook slack application and export URL
 
@@ -23,7 +26,17 @@ Create Webhook slack application and export URL
 export SLACK_URL=https://hooks.slack.com/xxx
 ```
 
-Right now pod watcher is only available on default namespace
+For internal k8s:
+
+```sh
+k8sslackevent serve --api internal
+```
+
+For External k8s, its based on current context in your .kube/config file:
+
+```sh
+k8sslackevent serve --api external
+```
 
 ### Env
 
