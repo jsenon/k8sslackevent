@@ -33,9 +33,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+var api string
 
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
@@ -45,17 +48,22 @@ var serveCmd = &cobra.Command{
 in order to get OOM signal
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		Serve()
+		if api == "internal" {
+			Serve("internal")
+		}
+		Serve("external")
 	},
 }
 
 func init() {
+	serveCmd.PersistentFlags().StringVar(&api, "api", "", "api type: internal or external")
 	rootCmd.AddCommand(serveCmd)
 }
 
 // Serve launch command serve
-func Serve() {
+func Serve(api string) {
 	var kubeconfig *string
+	var client *kubernetes.Clientset
 	var podsStore cache.Store
 	var podStorekube cache.Store
 	var nodesStore cache.Store
@@ -63,13 +71,35 @@ func Serve() {
 
 	ctx := context.Background()
 
-	kubeconfig = flag.String("kubeconfig", filepath.Join(homeDir(), ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-
-	client, err := Connect(kubeconfig)
-	if err != nil {
-		fmt.Println(err)
+	fmt.Println(api)
+	if api == "internal" {
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			panic(err.Error())
+		}
+		client, err = kubernetes.NewForConfig(config)
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 
+	if api == "external" {
+		fmt.Println(api)
+		kubeconfig = flag.String("kubeconfig", filepath.Join(homeDir(), ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+		flag.Parse()
+		config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		// create the clientset
+		client, err = kubernetes.NewForConfig(config)
+		if err != nil {
+			panic(err.Error())
+		}
+
+	}
+	fmt.Println("debug")
 	pods, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
 	if err != nil {
 		panic(err.Error())
