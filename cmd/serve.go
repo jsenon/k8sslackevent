@@ -355,8 +355,8 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 			for _, m := range n.Status.ContainerStatuses {
 				if m.LastTerminationState.Terminated != nil {
 					if m.LastTerminationState.Terminated.Reason == "OOMKilled" {
-						fmt.Println("Pod ", n.GetName(), "Container", m.Name, "has been restarted ", m.RestartCount, "time", "due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
-						msg := ("Pod " + n.GetName() + "Container" + m.Name + "has been restarted " + conv(m.RestartCount) + "time" + "due to " + m.LastTerminationState.Terminated.Reason + "at " + m.LastTerminationState.Terminated.FinishedAt.String())
+						fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
+						msg := ("Pod " + n.GetName() + " Container " + m.Name + " has been restarted " + conv(m.RestartCount) + " time due to " + m.LastTerminationState.Terminated.Reason + " at " + m.LastTerminationState.Terminated.FinishedAt.String())
 						publish(msg)
 					}
 				}
@@ -372,7 +372,7 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 		for _, m := range n.Status.ContainerStatuses {
 			if m.LastTerminationState.Terminated != nil {
 				if m.LastTerminationState.Terminated.Reason == "OOMKilled" {
-					fmt.Println("Pod ", n.GetName(), "Container", m.Name, "has been restarted ", m.RestartCount, "time", "due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
+					fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, " at ", m.LastTerminationState.Terminated.FinishedAt)
 				}
 			}
 		}
