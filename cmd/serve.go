@@ -175,13 +175,13 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				fmt.Println("Add Pod:", pod.GetName(), "on", namespace)
+				fmt.Println("Add Pod: ", pod.GetName(), " on ", namespace, " at ", time.Now())
 				msg := "New Pod added: " + pod.GetName() + namespace
 				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
-				fmt.Println("Delete Pod:", pod.GetName(), "on", namespace)
+				fmt.Println("Delete Pod:", pod.GetName(), " on ", namespace, " at ", time.Now())
 				msg := "Deleted Pod: " + pod.GetName() + "on" + namespace
 				publish(msg)
 			},
@@ -210,13 +210,13 @@ func eventNode(ctx context.Context, client *kubernetes.Clientset, store cache.St
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				node := obj.(*v1.Node)
-				fmt.Println("New Node:", node.GetName())
+				fmt.Println("New Node:", node.GetName(), " created at ", time.Now())
 				msg := "New Node added: " + node.GetName()
 				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				node := obj.(*v1.Node)
-				fmt.Println("Deleted Node:", node)
+				fmt.Println("Deleted Node:", node.GetName(), " at ", time.Now())
 				msg := "Deleted Node: " + node.GetName()
 				publish(msg)
 			},
@@ -268,13 +268,13 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
-				fmt.Println("New Event:", event.Reason, "Message:", event.Message, "Event Name:", event.Name)
+				fmt.Println("New Event: ", event.Reason, " Message: ", event.Message, " Event Name: ", event.Name, " at ", event.EventTime)
 				msg := "New Event: " + event.Reason + "\n" + event.Message
 				publish(msg)
 			},
 			DeleteFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
-				fmt.Println("Deleted event:", event.Reason, "", event.Message)
+				fmt.Println("Deleted event: ", event.Reason, " ", event.Message, " at ", event.EventTime)
 				msg := "New Event: " + event.Reason + "\n" + event.Message
 				publish(msg)
 			},
@@ -326,7 +326,6 @@ func eventall(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 
 func publish(msg string) {
 	url := os.Getenv("SLACK_URL")
-	// fmt.Println("Slack url", url)
 
 	values := map[string]string{"text": msg}
 	b, _ := json.Marshal(values)
@@ -337,7 +336,6 @@ func publish(msg string) {
 	}
 	httpclient := &http.Client{Transport: tr}
 	rs, err := httpclient.Post(url, "application/json", bytes.NewBuffer(b))
-	// fmt.Println("Body", b, "rs", rs)
 	if err != nil {
 		panic(err)
 	}
@@ -345,7 +343,7 @@ func publish(msg string) {
 }
 
 // nolint: gocyclo
-func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace string, offset uint32) error {
+func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace string, offset time.Duration) error {
 	if namespace == "all" {
 		a, err := client.CoreV1().Pods(v1.NamespaceAll).List(metav1.ListOptions{})
 		if err != nil {
@@ -354,10 +352,14 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 		for _, n := range a.Items {
 			for _, m := range n.Status.ContainerStatuses {
 				if m.LastTerminationState.Terminated != nil {
+					fmt.Println("Finish at ", m.LastTerminationState.Terminated.FinishedAt)
+					delay := m.LastTerminationState.Terminated.FinishedAt.Time.Add(-time.Minute * offset)
 					if m.LastTerminationState.Terminated.Reason == "OOMKilled" {
-						fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
-						msg := ("Pod " + n.GetName() + " Container " + m.Name + " has been restarted " + conv(m.RestartCount) + " time due to " + m.LastTerminationState.Terminated.Reason + " at " + m.LastTerminationState.Terminated.FinishedAt.String())
-						publish(msg)
+						if m.LastTerminationState.Terminated.FinishedAt.Time.After(delay) {
+							fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
+							msg := ("Pod " + n.GetName() + " Container " + m.Name + " has been restarted " + conv(m.RestartCount) + " time due to " + m.LastTerminationState.Terminated.Reason + " at " + m.LastTerminationState.Terminated.FinishedAt.String())
+							publish(msg)
+						}
 					}
 				}
 			}
@@ -371,8 +373,13 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 	for _, n := range a.Items {
 		for _, m := range n.Status.ContainerStatuses {
 			if m.LastTerminationState.Terminated != nil {
+				delay := m.LastTerminationState.Terminated.FinishedAt.Time.Add(-time.Minute * offset)
 				if m.LastTerminationState.Terminated.Reason == "OOMKilled" {
-					fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, " at ", m.LastTerminationState.Terminated.FinishedAt)
+					if m.LastTerminationState.Terminated.FinishedAt.Time.After(delay) {
+						fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, " at ", m.LastTerminationState.Terminated.FinishedAt)
+						msg := ("Pod " + n.GetName() + " Container " + m.Name + " has been restarted " + conv(m.RestartCount) + " time due to " + m.LastTerminationState.Terminated.Reason + " at " + m.LastTerminationState.Terminated.FinishedAt.String())
+						publish(msg)
+					}
 				}
 			}
 		}
