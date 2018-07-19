@@ -268,7 +268,7 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				event := obj.(*v1.Event)
-				fmt.Println("New Event: ", event.Reason, " Message: ", event.Message, " Event Name: ", event.Name, " at ", event.EventTime)
+				fmt.Println("New Event: ", event.Reason, " Message: ", event.Message, " Event Name: ", event.Name, " at ", event.CreationTimestamp)
 				msg := "New Event: " + event.Reason + "\n" + event.Message
 				publish(msg)
 			},
