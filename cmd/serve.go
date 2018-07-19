@@ -352,7 +352,6 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 		for _, n := range a.Items {
 			for _, m := range n.Status.ContainerStatuses {
 				if m.LastTerminationState.Terminated != nil {
-					fmt.Println("Finish at ", m.LastTerminationState.Terminated.FinishedAt)
 					delay := m.LastTerminationState.Terminated.FinishedAt.Time.Add(-time.Minute * offset)
 					if m.LastTerminationState.Terminated.Reason == "OOMKilled" {
 						if m.LastTerminationState.Terminated.FinishedAt.Time.After(delay) {
