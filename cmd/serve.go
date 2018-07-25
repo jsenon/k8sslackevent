@@ -328,7 +328,10 @@ func publish(msg string) {
 	url := os.Getenv("SLACK_URL")
 
 	values := map[string]string{"text": msg}
-	b, _ := json.Marshal(values)
+	b, err := json.Marshal(values)
+	if err != nil {
+		fmt.Println(err)
+	}
 	tr := &http.Transport{
 		MaxIdleConns:       10,
 		IdleConnTimeout:    30 * time.Second,
