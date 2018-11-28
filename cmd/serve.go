@@ -26,7 +26,10 @@ import (
 	r "runtime"
 	"time"
 
+	"github.com/jsenon/k8sslackevent/internal/service/cache"
+	"github.com/jsenon/k8sslackevent/internal/service/cache/bolt"
 	"github.com/spf13/cobra"
+
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -39,6 +42,7 @@ import (
 )
 
 var api string
+var caching db.Cache
 
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
@@ -118,6 +122,13 @@ func Serve(api string) {
 	if err != nil {
 		panic(err.Error())
 	}
+
+	caching = bolt.NewCache()
+	err = caching.Init()
+	if err != nil {
+		panic(err.Error())
+	}
+
 	// Watch event pod in default namespace
 	go eventPod(ctx, client, podsStore, "default")
 	// Watch event pod in kube-system namespace
@@ -360,7 +371,10 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 						if m.LastTerminationState.Terminated.FinishedAt.Time.After(delay) {
 							fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
 							msg := ("Pod " + n.GetName() + " Container " + m.Name + " has been restarted " + conv(m.RestartCount) + " time due to " + m.LastTerminationState.Terminated.Reason + " at " + m.LastTerminationState.Terminated.FinishedAt.String())
-							publish(msg)
+							if caching.CheckIfSended(msg) == false {
+								publish(msg)
+								caching.SaveMsg(msg)
+							}
 						}
 					}
 				}
@@ -380,7 +394,10 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 					if m.LastTerminationState.Terminated.FinishedAt.Time.After(delay) {
 						fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, " at ", m.LastTerminationState.Terminated.FinishedAt)
 						msg := ("Pod " + n.GetName() + " Container " + m.Name + " has been restarted " + conv(m.RestartCount) + " time due to " + m.LastTerminationState.Terminated.Reason + " at " + m.LastTerminationState.Terminated.FinishedAt.String())
-						publish(msg)
+						if caching.CheckIfSended(msg) == false {
+							publish(msg)
+							caching.SaveMsg(msg)
+						}
 					}
 				}
 			}
