@@ -18,7 +18,7 @@ default: depend test lint build
 
 depend:
 	go get -u github.com/golang/dep
-	dep ensure
+	dep ensure -vendor-only
 test:
 	go test -v ./...
 build_local:
