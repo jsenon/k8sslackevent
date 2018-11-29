@@ -9,6 +9,8 @@ DOCKER_BUILD_ARGS := --build-arg HTTP_PROXY=$(http_proxy) --build-arg HTTPS_PROX
 
 APP_VERSION := latest
 
+GOMETALINTER:=$(shell command -v gometalinter 2> /dev/null)
+
 #-----------------------------------------------------------------------------
 # BUILD
 #-----------------------------------------------------------------------------
@@ -27,8 +29,10 @@ build:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build
 	docker build $(DOCKER_BUILD_ARGS) -t $(DOCKER_USER)/k8sslackevent:$(APP_VERSION)  .
 lint:
+ifndef GOMETALINTER
 	go get -u github.com/alecthomas/gometalinter
 	gometalinter --install
+endif
 	gometalinter ./... --exclude=vendor --deadline=60s
 
 #-----------------------------------------------------------------------------

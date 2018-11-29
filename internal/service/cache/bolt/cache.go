@@ -35,8 +35,8 @@ func (s *Bolt) Init() error {
 	// Start a write transaction.
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		// Create a bucket.
-		_, err := tx.CreateBucket([]byte(BUCKET))
-		return err
+		_, errBucket := tx.CreateBucket([]byte(BUCKET))
+		return errBucket
 	})
 	return err
 }

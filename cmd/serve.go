@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -356,7 +357,6 @@ func publish(msg string) {
 	defer rs.Body.Close() // nolint: errcheck
 }
 
-// nolint: gocyclo
 func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace string, offset time.Duration) error {
 	if namespace == "all" {
 		a, err := client.CoreV1().Pods(v1.NamespaceAll).List(metav1.ListOptions{})
@@ -371,9 +371,12 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 						if m.LastTerminationState.Terminated.FinishedAt.Time.After(delay) {
 							fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, "at ", m.LastTerminationState.Terminated.FinishedAt)
 							msg := ("Pod " + n.GetName() + " Container " + m.Name + " has been restarted " + conv(m.RestartCount) + " time due to " + m.LastTerminationState.Terminated.Reason + " at " + m.LastTerminationState.Terminated.FinishedAt.String())
-							if caching.CheckIfSended(msg) == false {
+							if !caching.CheckIfSended(msg) {
 								publish(msg)
-								caching.SaveMsg(msg)
+								err = caching.SaveMsg(msg)
+								if err != nil {
+									log.Println(err.Error())
+								}
 							}
 						}
 					}
@@ -394,9 +397,12 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 					if m.LastTerminationState.Terminated.FinishedAt.Time.After(delay) {
 						fmt.Println("Pod ", n.GetName(), " Container ", m.Name, " has been restarted ", m.RestartCount, " time due to ", m.LastTerminationState.Terminated.Reason, " at ", m.LastTerminationState.Terminated.FinishedAt)
 						msg := ("Pod " + n.GetName() + " Container " + m.Name + " has been restarted " + conv(m.RestartCount) + " time due to " + m.LastTerminationState.Terminated.Reason + " at " + m.LastTerminationState.Terminated.FinishedAt.String())
-						if caching.CheckIfSended(msg) == false {
+						if !caching.CheckIfSended(msg) {
 							publish(msg)
-							caching.SaveMsg(msg)
+							err = caching.SaveMsg(msg)
+							if err != nil {
+								log.Println(err.Error())
+							}
 						}
 					}
 				}
