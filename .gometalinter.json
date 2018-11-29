@@ -1,0 +1,43 @@
+{
+  "Vendor": true,
+  "Deadline": "10m",
+  "Sort": [
+    "linter",
+    "severity",
+    "path",
+    "line"
+  ],
+  "EnableGC": true,
+  "Aggregate": true,
+  "WarnUnmatchedDirective": true,
+  "Exclude": [
+    "parameter .* always receives",
+    ".pb.go",
+    ".gen.go",
+    "^vendor",
+    ".*mocks.*",
+    "\\.generated\\."
+  ],
+  "Enable": [
+    "deadcode",
+    "gofmt",
+    "goimports",
+    "golint",
+    "gosimple",
+    "ineffassign",
+    "interfacer",
+    "misspell",
+    "unconvert",
+    "unparam",
+    "unused",
+    "vet",
+    "errcheck",
+    "safesql",
+    "gosec",
+    "vetshadow",
+    "maligned",
+    "gocyclo"
+  ],
+  "LineLength": 220,
+  "Cyclo" : 20
+  }
