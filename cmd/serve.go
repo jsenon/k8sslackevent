@@ -69,11 +69,11 @@ func init() {
 func Serve(api string) {
 	var kubeconfig *string
 	var client *kubernetes.Clientset
-	var podsStore cache.Store
-	var podStorekube cache.Store
-	var nodesStore cache.Store
-	var eventStore cache.Store
-	var eventallStore cache.Store
+	// var podsStore cache.Store
+	// var podStorekube cache.Store
+	// var nodesStore cache.Store
+	// var eventStore cache.Store
+	// var eventallStore cache.Store
 
 	ctx := context.Background()
 
@@ -119,7 +119,7 @@ func Serve(api string) {
 	fmt.Printf("There are %d nodes in the cluster\n", len(nodes.Items))
 	fmt.Println("*****************************************")
 
-	_, err = getNode(ctx, client)
+	err = getNode(ctx, client)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -131,15 +131,15 @@ func Serve(api string) {
 	}
 
 	// Watch event pod in default namespace
-	go eventPod(ctx, client, podsStore, "default")
+	go eventPod(ctx, client, "default")
 	// Watch event pod in kube-system namespace
-	go eventPod(ctx, client, podStorekube, "kube-system")
+	go eventPod(ctx, client, "kube-system")
 	// Watch node event
-	go eventNode(ctx, client, nodesStore)
+	go eventNode(ctx, client)
 	// Watch event in default namespace
-	go event(ctx, client, eventStore, "default")
+	go event(ctx, client, "default")
 	// Watch event in all namespace and launch check if its OOMKilled
-	go eventall(ctx, client, eventallStore)
+	go eventall(ctx, client)
 
 	fmt.Println("** Watcher started - Waiting events **")
 	r.Goexit()
@@ -170,7 +170,7 @@ func homeDir() string {
 	return os.Getenv("USERPROFILE") // windows
 }
 
-func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Store, namespace string) cache.Store {
+func eventPod(ctx context.Context, client *kubernetes.Clientset, namespace string) {
 
 	//Define what we want to look for (Pods)
 	watchlist := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "pods", namespace, fields.Everything())
@@ -180,7 +180,7 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 	resyncPeriod := 5 * time.Minute
 
 	//Setup an informer to call functions when the watchlist changes
-	eStore, eController := cache.NewInformer(
+	_, eController := cache.NewInformer(
 		watchlist,
 		&v1.Pod{},
 		resyncPeriod,
@@ -200,14 +200,14 @@ func eventPod(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 		},
 	)
 	eController.Run(ctx.Done())
-	return eStore
+	// return eStore
 }
 
-func eventNode(ctx context.Context, client *kubernetes.Clientset, store cache.Store) cache.Store {
+func eventNode(ctx context.Context, client *kubernetes.Clientset) {
 	resyncPeriod := 30 * time.Minute
 
 	//Setup an informer to call functions when the watchlist changes
-	eStore, eController := cache.NewInformer(
+	_, eController := cache.NewInformer(
 		// watchlist,
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
@@ -236,11 +236,11 @@ func eventNode(ctx context.Context, client *kubernetes.Clientset, store cache.St
 		},
 	)
 	eController.Run(ctx.Done())
-	return eStore
+	// return eStore
 	// ctx is not canceled, continue immediately
 }
 
-func getNode(ctx context.Context, client *kubernetes.Clientset) (cache.Store, error) {
+func getNode(ctx context.Context, client *kubernetes.Clientset) error {
 	for {
 		a, err := client.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil {
@@ -252,20 +252,20 @@ func getNode(ctx context.Context, client *kubernetes.Clientset) (cache.Store, er
 		select {
 		case <-ctx.Done():
 			// ctx is canceled
-			return nil, ctx.Err()
+			return ctx.Err()
 		default:
-			return nil, nil
+			return nil
 			// ctx is not canceled, continue immediately
 		}
 	}
 }
 
-func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store, namespace string) cache.Store {
+func event(ctx context.Context, client *kubernetes.Clientset, namespace string) {
 
 	resyncPeriod := 30 * time.Minute
 
 	//Setup an informer to call functions when the watchlist changes
-	eStore, eController := cache.NewInformer(
+	_, eController := cache.NewInformer(
 		// watchlist,
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
@@ -294,16 +294,16 @@ func event(ctx context.Context, client *kubernetes.Clientset, store cache.Store,
 		},
 	)
 	eController.Run(ctx.Done())
-	return eStore
+	// return eStore
 	// ctx is not canceled, continue immediately
 }
 
-func eventall(ctx context.Context, client *kubernetes.Clientset, store cache.Store) cache.Store {
+func eventall(ctx context.Context, client *kubernetes.Clientset) {
 
 	resyncPeriod := 30 * time.Minute
 
 	//Setup an informer to call functions when the watchlist changes
-	eStore, eController := cache.NewInformer(
+	_, eController := cache.NewInformer(
 		// watchlist,
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
@@ -332,7 +332,7 @@ func eventall(ctx context.Context, client *kubernetes.Clientset, store cache.Sto
 		},
 	)
 	eController.Run(ctx.Done())
-	return eStore
+	// return eStore
 	// ctx is not canceled, continue immediately
 }
 
@@ -383,6 +383,7 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 				}
 			}
 		}
+		ctx.Done()
 		return nil
 	}
 	a, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
@@ -409,6 +410,7 @@ func findPodKilled(ctx context.Context, client *kubernetes.Clientset, namespace 
 			}
 		}
 	}
+	ctx.Done()
 	return nil
 }
 
