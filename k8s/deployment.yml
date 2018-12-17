@@ -15,6 +15,7 @@ spec:
         app: k8sslackevent
         version: v.0.0.1
     spec:
+      serviceAccountName: k8sslackevent
       containers:
       - name: k8sslackevent
         image: docker.io/jsenon/k8sslackevent:latest
