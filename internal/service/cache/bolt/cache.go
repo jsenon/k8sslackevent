@@ -1,11 +1,12 @@
 package bolt
 
 import (
+	"crypto/sha1"
 	"io/ioutil"
 	"log"
 	"os"
 
-	"github.com/jsenon/k8sslackevent/internal/service/cache"
+	db "github.com/jsenon/k8sslackevent/internal/service/cache"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -51,16 +52,19 @@ func tempfile() string {
 
 // CheckIfSended will check if msg is registered as already sended
 func (s *Bolt) CheckIfSended(msg string) bool {
+	key := sha1.Sum([]byte(msg))
 	sended := false
 	// Retrieve the key again.
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		value := tx.Bucket([]byte(BUCKET)).Get([]byte(msg))
+		value := tx.Bucket([]byte(BUCKET)).Get(key[:])
 		if value == nil {
 			sended = false
+			return nil
 		}
 		sended = true
 		return nil
 	}); err != nil {
+		log.Println(err.Error())
 		return false
 	}
 	return sended
@@ -68,8 +72,9 @@ func (s *Bolt) CheckIfSended(msg string) bool {
 
 // SaveMsg will save the msg as sended in cache
 func (s *Bolt) SaveMsg(msg string) error {
+	key := sha1.Sum([]byte(msg))
 	err := s.db.Update(func(tx *bolt.Tx) error {
-		err := tx.Bucket([]byte(BUCKET)).Put([]byte(msg), []byte("sended"))
+		err := tx.Bucket([]byte(BUCKET)).Put(key[:], []byte("msg"))
 		return err
 	})
 	return err
@@ -77,5 +82,8 @@ func (s *Bolt) SaveMsg(msg string) error {
 
 // Close will delete the BoltDB
 func (s *Bolt) Close() error {
+	if err := s.db.Close(); err != nil {
+		log.Println(err.Error())
+	}
 	return os.Remove(s.db.Path())
 }
