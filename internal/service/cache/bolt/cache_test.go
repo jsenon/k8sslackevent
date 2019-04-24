@@ -22,4 +22,3 @@ func TestNominalCaseNotSended(t *testing.T) {
 
 	g.Expect(caching.CheckIfSended(msg)).To(BeTrue())
 }
-

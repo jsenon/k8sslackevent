@@ -6,7 +6,7 @@ jobs:
   build:
     docker:
       # specify the version
-      - image: circleci/golang:1.10
+      - image: circleci/golang:1.12
       
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -28,8 +28,6 @@ jobs:
           name: Get dependencies
           command: |
             go get -u github.com/golang/dep/cmd/dep
-            # go get -t -d -v ./...
-            # dep ensure
             dep ensure -vendor-only
       - run: 
           name: Test
@@ -38,9 +36,8 @@ jobs:
       - run: 
           name: Lint
           command: |
-            go get -u github.com/alecthomas/gometalinter
-            gometalinter --install
-            gometalinter ./... --exclude=vendor --deadline=240s
+            go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+            golangci-lint -v run
       - run: 
           name: Code Coverage
           command: |
