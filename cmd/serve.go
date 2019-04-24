@@ -27,11 +27,11 @@ import (
 	r "runtime"
 	"time"
 
-	"github.com/jsenon/k8sslackevent/internal/service/cache"
+	db "github.com/jsenon/k8sslackevent/internal/service/cache"
 	"github.com/jsenon/k8sslackevent/internal/service/cache/bolt"
 	"github.com/spf13/cobra"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
